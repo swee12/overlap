@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Overlap · Timezone Overlap Finder</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --soft: #f5f6f4;
+  --border: #e7e8e5;
+  --border-strong: #d4d6d1;
+  --text: #16181a;
+  --muted: #62666a;
+  --faint: #8d9195;
+  --error: #c2410c;
+  /* City colors as RGB triplets: you (green), second (coral), third (sun) */
+  --c0: 16 185 129;
+  --c1: 255 112 92;
+  --c2: 245 182 0;
+  --green-ink: #047857;
+  --green-tint: #e8f8f1;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-variant-numeric: tabular-nums; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid rgb(var(--c0)); outline-offset: 2px; }
+
+.app { max-width: 640px; margin: 0 auto; padding: 20px 16px 56px; display: grid; gap: 14px; }
+
+/* ---------- Header ---------- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px 6px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+.brand svg { display: block; }
+.date { font-size: 14px; color: var(--muted); white-space: nowrap; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
+.section-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* ---------- Answer ---------- */
+.hero { padding: 22px 22px 20px; }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); }
+.answer {
+  margin: 6px 0 0;
+  font-size: clamp(36px, 9vw, 56px); font-weight: 800; line-height: 1.04; letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+.answer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; font-size: 16px; color: var(--muted); }
+.pill {
+  display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px;
+  font-size: 14px; font-weight: 700; color: var(--green-ink); background: var(--green-tint);
+}
+.equiv { list-style: none; padding: 14px 0 0; margin: 16px 0 0; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.equiv li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; font-size: 15px; }
+.equiv .who { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); min-width: 118px; }
+.equiv .t { font-weight: 600; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: rgb(var(--c)); flex: none; transform: translateY(-1px); }
+.tag { font-size: 12px; color: var(--faint); }
+.also { margin-top: 12px; font-size: 14px; color: var(--muted); }
+.also b { color: var(--text); font-weight: 600; }
+.none-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; max-width: 44ch; }
+
+/* ---------- Timeline ---------- */
+.timeline { padding: 18px 18px 16px; }
+.tl { --h-you: 46px; --h: 36px; --gap: 10px; display: grid; grid-template-columns: 100px minmax(0, 1fr); column-gap: 12px; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+.tl-labels, .tl-rows { display: grid; row-gap: var(--gap); }
+.axis-spacer, .axis { height: 20px; margin-bottom: 4px; }
+.lab { height: var(--h); display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.2; }
+.lab.you { height: var(--h-you); }
+.lab .name { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.lab .name span { overflow: hidden; text-overflow: ellipsis; }
+.lab.you .name { font-size: 14px; }
+.lab .time { font-size: 12px; color: var(--muted); white-space: nowrap; padding-left: 16px; }
+.tl-tracks { position: relative; min-width: 0; }
+.axis { position: relative; font-size: 11px; color: var(--faint); }
+.axis span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.axis span.first { transform: none; }
+.axis span.last { transform: translateX(-100%); }
+.axis b { font-weight: 500; }
+.axis .short { display: none; }
+.tl-rows { position: relative; }
+.track { position: relative; height: var(--h); border-radius: 9px; overflow: hidden; background: var(--soft); }
+.track.you { height: var(--h-you); }
+.gridlines { position: absolute; inset: 0; pointer-events: none; }
+.band { position: absolute; top: 0; bottom: 0; }
+.band.work { background: rgb(var(--c) / .22); }
+.band.ov { background: rgb(var(--c) / .6); }
+.track.you .band.ov { background: rgb(var(--c)); }
+.ov-col { position: absolute; top: -5px; bottom: -5px; border: 2px solid rgb(var(--c0)); border-radius: 12px; pointer-events: none; }
+.vline { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; pointer-events: none; border-radius: 2px; }
+.vline.now { background: var(--text); opacity: .35; }
+.vline.cursor { background: var(--text); display: none; }
+.cursor-chip {
+  position: absolute; top: 0; transform: translateX(-50%); display: none; z-index: 2;
+  font-size: 11px; font-weight: 700; color: #fff; background: var(--text); border-radius: 6px; padding: 2px 6px; white-space: nowrap;
+}
+.scrubbing .vline.cursor, .scrubbing .cursor-chip { display: block; }
+.scrubbing .axis span { opacity: .2; }
+.tl-foot { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 12px; color: var(--faint); }
+.tl-foot i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.tl-foot .k-work { background: rgb(var(--c0) / .22); }
+.tl-foot .k-ov { background: rgb(var(--c0)); }
+
+/* ---------- Cities ---------- */
+.cities-panel { padding: 18px 16px 16px; }
+.cities { display: grid; gap: 10px; }
+.city { padding: 12px 14px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.city.you { border: 2px solid rgb(var(--c0)); padding: 11px 13px 13px; }
+.city-top { display: flex; align-items: center; gap: 10px; }
+.city-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--green-ink); }
+.city-row { display: flex; align-items: center; gap: 10px; }
+.city-row .dot { width: 10px; height: 10px; transform: none; }
+.icon-btn {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; margin-right: -8px; flex: none;
+  border: 0; border-radius: 10px; background: transparent; color: var(--faint); cursor: pointer;
+}
+.icon-btn:hover { background: var(--soft); color: var(--text); }
+.select-wrap { position: relative; flex: 1; min-width: 0; }
+.select-wrap svg { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--faint); }
+select {
+  -webkit-appearance: none; appearance: none; width: 100%;
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 18px; font-weight: 700; letter-spacing: -.01em;
+  padding: 4px 26px 4px 0; min-height: 44px; text-overflow: ellipsis;
+}
+.city.you select { font-size: 24px; letter-spacing: -.02em; }
+.hours { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 4px; }
+.hours-label { grid-column: 1 / -1; font-size: 12px; color: var(--faint); }
+.hours .dash { color: var(--faint); }
+input[type="time"] {
+  width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px;
+  font-size: 15px; font-variant-numeric: tabular-nums;
+  background: var(--soft); border: 1px solid transparent; border-radius: 10px;
+}
+input[type="time"]:hover { border-color: var(--border-strong); }
+input[type="time"]:focus { outline: none; background: #fff; border-color: rgb(var(--c0)); }
+input[type="time"][aria-invalid="true"] { border-color: var(--error); background: #fff; }
+.err { margin: 8px 0 0; font-size: 13px; color: var(--error); }
+.add {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 48px; margin-top: 10px; cursor: pointer;
+  font-weight: 600; color: var(--green-ink);
+  background: transparent; border: 1.5px dashed var(--border-strong); border-radius: 14px;
+}
+.add:hover { border-color: rgb(var(--c0)); background: var(--green-tint); }
+.add[hidden] { display: none; }
+
+@media (max-width: 480px) {
+  .app { padding: 14px 12px 40px; }
+  .hero { padding: 20px 18px 18px; }
+  .timeline { padding: 16px 12px 14px; }
+  .tl { grid-template-columns: 76px minmax(0, 1fr); column-gap: 8px; --h-you: 42px; --h: 34px; }
+  .lab .time { padding-left: 0; }
+  .lab .name .dot { display: none; }
+  .axis .long { display: none; }
+  .axis .short { display: inline; }
+  .equiv .who { min-width: 0; }
+  .cities-panel { padding: 16px 12px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true">
+        <circle cx="10" cy="10" r="8" fill="rgb(16 185 129)"/>
+        <circle cx="18" cy="10" r="8" fill="rgb(255 112 92)" fill-opacity=".85"/>
+      </svg>
+      Overlap
+    </div>
+    <div class="date" id="today"></div>
+  </header>
+
+  <section class="panel hero" id="summary" aria-live="polite"></section>
+
+  <section class="panel timeline" aria-label="24-hour timeline">
+    <h2 class="section-title">Your day</h2>
+    <div class="tl" id="tl"></div>
+    <div class="tl-foot" aria-hidden="true">
+      <span><i class="k-work"></i>Working hours</span>
+      <span><i class="k-ov"></i>Everyone available</span>
+    </div>
+  </section>
+
+  <section class="panel cities-panel" aria-label="Cities and working hours">
+    <h2 class="section-title">Cities</h2>
+    <div class="cities" id="cities"></div>
+    <button type="button" class="add" id="add">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Add city
+    </button>
+  </section>
+</div>
+
+<script>
+/* =========================================================
+   Data
+   ========================================================= */
+const CITIES = [
+  ["Honolulu", "Pacific/Honolulu"],
+  ["Anchorage", "America/Anchorage"],
+  ["Los Angeles", "America/Los_Angeles"],
+  ["San Francisco", "America/Los_Angeles"],
+  ["Seattle", "America/Los_Angeles"],
+  ["Vancouver", "America/Vancouver"],
+  ["Phoenix", "America/Phoenix"],
+  ["Denver", "America/Denver"],
+  ["Mexico City", "America/Mexico_City"],
+  ["Chicago", "America/Chicago"],
+  ["Toronto", "America/Toronto"],
+  ["New York", "America/New_York"],
+  ["Bogotá", "America/Bogota"],
+  ["Lima", "America/Lima"],
+  ["Santiago", "America/Santiago"],
+  ["São Paulo", "America/Sao_Paulo"],
+  ["Buenos Aires", "America/Argentina/Buenos_Aires"],
+  ["St. John's", "America/St_Johns"],
+  ["Reykjavik", "Atlantic/Reykjavik"],
+  ["London", "Europe/London"],
+  ["Dublin", "Europe/Dublin"],
+  ["Lisbon", "Europe/Lisbon"],
+  ["Madrid", "Europe/Madrid"],
+  ["Paris", "Europe/Paris"],
+  ["Amsterdam", "Europe/Amsterdam"],
+  ["Berlin", "Europe/Berlin"],
+  ["Zurich", "Europe/Zurich"],
+  ["Rome", "Europe/Rome"],
+  ["Stockholm", "Europe/Stockholm"],
+  ["Warsaw", "Europe/Warsaw"],
+  ["Athens", "Europe/Athens"],
+  ["Istanbul", "Europe/Istanbul"],
+  ["Moscow", "Europe/Moscow"],
+  ["Lagos", "Africa/Lagos"],
+  ["Cairo", "Africa/Cairo"],
+  ["Johannesburg", "Africa/Johannesburg"],
+  ["Nairobi", "Africa/Nairobi"],
+  ["Tel Aviv", "Asia/Jerusalem"],
+  ["Tehran", "Asia/Tehran"],
+  ["Dubai", "Asia/Dubai"],
+  ["Karachi", "Asia/Karachi"],
+  ["Bangalore", "Asia/Kolkata"],
+  ["Mumbai", "Asia/Kolkata"],
+  ["New Delhi", "Asia/Kolkata"],
+  ["Dhaka", "Asia/Dhaka"],
+  ["Bangkok", "Asia/Bangkok"],
+  ["Jakarta", "Asia/Jakarta"],
+  ["Singapore", "Asia/Singapore"],
+  ["Hong Kong", "Asia/Hong_Kong"],
+  ["Shanghai", "Asia/Shanghai"],
+  ["Manila", "Asia/Manila"],
+  ["Seoul", "Asia/Seoul"],
+  ["Tokyo", "Asia/Tokyo"],
+  ["Perth", "Australia/Perth"],
+  ["Adelaide", "Australia/Adelaide"],
+  ["Brisbane", "Australia/Brisbane"],
+  ["Sydney", "Australia/Sydney"],
+  ["Melbourne", "Australia/Melbourne"],
+  ["Auckland", "Pacific/Auckland"]
+];
+const CITY_TZ = Object.fromEntries(CITIES);
+const MAX_CITIES = 3;
+const DEFAULT_START = "09:00";
+const DEFAULT_END = "17:00";
+
+/* =========================================================
+   Time zone helpers (pure, Intl-based so DST is automatic)
+   ========================================================= */
+const _dtf = {};
+function dtf(tz) {
+  return _dtf[tz] || (_dtf[tz] = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  }));
+}
+// Wall-clock fields of instant t in zone tz.
+function zoneParts(tz, t) {
+  const o = {};
+  for (const p of dtf(tz).formatToParts(t)) if (p.type !== "literal") o[p.type] = +p.value;
+  if (o.hour === 24) o.hour = 0;
+  return o;
+}
+// UTC offset (ms) of zone tz at instant t.
+function offsetMs(tz, t) {
+  const p = zoneParts(tz, t);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(t / 1000) * 1000;
+}
+// Instant of local midnight on y-m-d in tz.
+function zonedMidnight(tz, y, m, d) {
+  const guess = Date.UTC(y, m - 1, d);
+  let t = guess - offsetMs(tz, guess);
+  t = guess - offsetMs(tz, t);
+  return t;
+}
+// The reference zone's current calendar day: [start, end) instants.
+function dayBounds(tz, now) {
+  const p = zoneParts(tz, now);
+  const start = zonedMidnight(tz, p.year, p.month, p.day);
+  const n = new Date(Date.UTC(p.year, p.month - 1, p.day + 1));
+  const end = zonedMidnight(tz, n.getUTCFullYear(), n.getUTCMonth() + 1, n.getUTCDate());
+  return { start, end, minutes: Math.round((end - start) / 60000), y: p.year, m: p.month, d: p.day };
+}
+function toMinutes(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || "");
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+// Turn a 0/1 array into [start, end) runs of 1s.
+function runs(arr) {
+  const out = [];
+  let s = -1;
+  for (let i = 0; i <= arr.length; i++) {
+    const on = i < arr.length && arr[i];
+    if (on && s < 0) s = i;
+    else if (!on && s >= 0) { out.push([s, i]); s = -1; }
+  }
+  return out;
+}
+function hoursValidity(row) {
+  const s = toMinutes(row.start), e = toMinutes(row.end);
+  if (s == null || e == null) return "Enter a start and end time.";
+  if (e <= s) return "End time must be after start time.";
+  return "";
+}
+
+/*
+  Core calculation. Works minute-by-minute across the reference city's
+  current day (which is 23 or 25 hours on DST change days). The offset of
+  each zone is sampled every 15 minutes; real-world offset changes always
+  fall on 15-minute UTC boundaries, so this is exact.
+*/
+function compute(refTz, rows, now) {
+  const day = dayBounds(refTz, now);
+  const N = day.minutes;
+  const samples = Math.ceil(N / 15) + 1;
+  const results = rows.map(r => {
+    const error = hoursValidity(r);
+    const work = new Uint8Array(N);
+    if (!error) {
+      const s = toMinutes(r.start), e = toMinutes(r.end);
+      const offs = [];
+      for (let k = 0; k < samples; k++) offs.push(offsetMs(r.tz, day.start + k * 900000));
+      for (let m = 0; m < N; m++) {
+        const local = new Date(day.start + m * 60000 + offs[(m / 15) | 0]);
+        const lm = local.getUTCHours() * 60 + local.getUTCMinutes();
+        work[m] = lm >= s && lm < e ? 1 : 0;
+      }
+    }
+    return { error, work, intervals: runs(work) };
+  });
+  const allValid = results.every(r => !r.error);
+  let overlap = [];
+  if (allValid) {
+    const o = new Uint8Array(N);
+    for (let m = 0; m < N; m++) o[m] = results.every(r => r.work[m]) ? 1 : 0;
+    overlap = runs(o);
+  }
+  return { day, results, overlap, allValid };
+}
+
+/* ---------- formatting ---------- */
+const _tf = {};
+function fmtTime(tz, t) {
+  const f = _tf[tz] || (_tf[tz] = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }));
+  return f.format(t);
+}
+function fmtRange(tz, a, b) {
+  const s = fmtTime(tz, a), e = fmtTime(tz, b);
+  const [st, sp] = s.split(/\s+/), [, ep] = e.split(/\s+/);
+  return sp === ep ? `${st}–${e}` : `${s}–${e}`;
+}
+function fmtDuration(mins) {
+  if (mins < 60) return `${mins} min`;
+  if (mins % 30 === 0) { const h = mins / 60; return `${h} ${h === 1 ? "hr" : "hrs"}`; }
+  const h = Math.floor(mins / 60);
+  return `${h} ${h === 1 ? "hr" : "hrs"} ${mins % 60} min`;
+}
+function offsetLabel(tz, t) {
+  const m = Math.round(offsetMs(tz, t) / 60000), a = Math.abs(m);
+  return "UTC" + (m < 0 ? "−" : "+") + Math.floor(a / 60) + (a % 60 ? ":" + String(a % 60).padStart(2, "0") : "");
+}
+// Day difference between the calendar dates of instant t in two zones.
+function dayDiff(tz, refTz, t) {
+  const a = zoneParts(tz, t), b = zoneParts(refTz, t);
+  return Math.round((Date.UTC(a.year, a.month - 1, a.day) - Date.UTC(b.year, b.month - 1, b.day)) / 86400000);
+}
+function weekday(tz, t) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(t);
+}
+
+/* ---------- device zone → closest city ---------- */
+function detectCityKey() {
+  let tz = "UTC";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) {}
+  const exact = CITIES.find(c => c[1] === tz);
+  if (exact) return exact[0];
+  try {
+    if (/\//.test(tz) && !/^Etc\//.test(tz)) {
+      // Same UTC offset in both January and July = same clock all year.
+      const y = new Date().getUTCFullYear();
+      const jan = Date.UTC(y, 0, 15), jul = Date.UTC(y, 6, 15);
+      const sig = z => offsetMs(z, jan) + "," + offsetMs(z, jul);
+      const target = sig(tz);
+      const matches = CITIES.filter(c => sig(c[1]) === target);
+      const region = tz.split("/")[0];
+      const best = matches.find(c => c[1].split("/")[0] === region) || matches[0];
+      if (best) return best[0];
+    }
+  } catch (e) {}
+  return "__tz:" + tz;
+}
+function keyTz(key) { return key.startsWith("__tz:") ? key.slice(5) : CITY_TZ[key]; }
+function keyName(key) { return key.startsWith("__tz:") ? key.slice(5).replace(/_/g, " ") : key; }
+
+/* =========================================================
+   UI
+   ========================================================= */
+if (typeof document !== "undefined") {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const colorVar = i => `--c: var(--c${i})`;
+  const CHEVRON = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const CLOSE = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+  const userKey = detectCityKey();
+  const firstOther = ["London", "New York", "Bangalore"].find(c => c !== userKey);
+  const state = {
+    rows: [
+      { key: userKey, start: DEFAULT_START, end: DEFAULT_END },
+      { key: firstOther, start: DEFAULT_START, end: DEFAULT_END }
+    ]
+  };
+  let hoverMin = null;
+  let last = null;
+
+  function rowsWithTz() { return state.rows.map(r => ({ ...r, tz: keyTz(r.key) })); }
+
+  function fillOptions(select, selectedKey, isUser) {
+    const now = Date.now();
+    const list = [...CITIES].sort((a, b) => a[0].localeCompare(b[0]));
+    let html = "";
+    if (isUser && selectedKey.startsWith("__tz:")) {
+      const tz = keyTz(selectedKey);
+      let off = "";
+      try { off = ` (${offsetLabel(tz, now)})`; } catch (e) {}
+      html += `<option value="${esc(selectedKey)}">${esc(keyName(selectedKey))}${off}</option>`;
+    }
+    for (const [name, tz] of list) {
+      html += `<option value="${esc(name)}">${esc(name)} (${offsetLabel(tz, now)})</option>`;
+    }
+    select.innerHTML = html;
+    select.value = selectedKey;
+  }
+
+  function buildCards() {
+    const wrap = $("cities");
+    wrap.innerHTML = "";
+    state.rows.forEach((row, i) => {
+      const isUser = i === 0;
+      const card = document.createElement("div");
+      card.className = "city" + (isUser ? " you" : "");
+      card.style.cssText = colorVar(i);
+      const id = "city-" + i;
+      const canRemove = !isUser && state.rows.length > 2;
+      card.innerHTML = `
+        ${isUser ? `<label class="city-label" for="${id}">Your city</label>` : ""}
+        <div class="city-row">
+          ${isUser ? "" : `<span class="dot"></span>`}
+          <div class="select-wrap"><select id="${id}" ${isUser ? "" : `aria-label="Teammate's city"`}></select>${CHEVRON}</div>
+          ${canRemove ? `<button type="button" class="icon-btn remove" aria-label="Remove ${esc(keyName(row.key))}">${CLOSE}</button>` : ""}
+        </div>
+        <div class="hours" role="group" aria-label="Working hours">
+          <span class="hours-label">Working hours</span>
+          <input type="time" class="start num" aria-label="Start time" value="${row.start}">
+          <span class="dash">–</span>
+          <input type="time" class="end num" aria-label="End time" value="${row.end}">
+        </div>
+        <p class="err" hidden></p>`;
+      const sel = card.querySelector("select");
+      fillOptions(sel, row.key, isUser);
+      sel.addEventListener("change", () => {
+        row.key = sel.value;
+        const btn = card.querySelector(".remove");
+        if (btn) btn.setAttribute("aria-label", "Remove " + keyName(row.key));
+        update();
+      });
+      const start = card.querySelector(".start"), end = card.querySelector(".end");
+      const onTime = () => { row.start = start.value; row.end = end.value; update(); };
+      for (const inp of [start, end]) { inp.addEventListener("input", onTime); inp.addEventListener("change", onTime); }
+      const rm = card.querySelector(".remove");
+      if (rm) rm.addEventListener("click", () => { state.rows.splice(i, 1); buildCards(); update(); });
+      wrap.appendChild(card);
+    });
+    $("add").hidden = state.rows.length >= MAX_CITIES;
+  }
+
+  $("add").addEventListener("click", () => {
+    if (state.rows.length >= MAX_CITIES) return;
+    const used = new Set(state.rows.map(r => r.key));
+    const key = ["Tokyo", "New York", "London", "Bangalore", "Sydney", "Berlin"].find(k => !used.has(k)) || "Singapore";
+    state.rows.push({ key, start: DEFAULT_START, end: DEFAULT_END });
+    buildCards();
+    update();
+    const sels = document.querySelectorAll("#cities select");
+    sels[sels.length - 1].focus();
+  });
+
+  function renderErrors(res) {
+    const cards = document.querySelectorAll("#cities .city");
+    res.results.forEach((r, i) => {
+      const card = cards[i];
+      if (!card) return;
+      const p = card.querySelector(".err");
+      p.textContent = r.error;
+      p.hidden = !r.error;
+      card.querySelectorAll('input[type="time"]').forEach(inp => inp.setAttribute("aria-invalid", r.error ? "true" : "false"));
+    });
+  }
+
+  function equivList(rows, refTz, ta, tb) {
+    return rows.slice(1).map((r, j) => {
+      const dd = dayDiff(r.tz, refTz, ta);
+      const tag = dd === 0 ? "" : `<span class="tag">${weekday(r.tz, ta)} · ${dd > 0 ? "next day" : "previous day"}</span>`;
+      return `<li style="${colorVar(j + 1)}"><span class="who"><span class="dot"></span>${esc(keyName(r.key))}</span><span class="t num">${fmtRange(r.tz, ta, tb)}</span>${tag}</li>`;
+    }).join("");
+  }
+
+  function renderSummary(res, rows) {
+    const el = $("summary");
+    const refTz = rows[0].tz;
+    const eyebrow = `<div class="eyebrow">Best time to meet today</div>`;
+    if (!res.allValid || !res.overlap.length) {
+      el.classList.add("none");
+      if (!res.allValid) {
+        const bad = res.results.map((r, i) => (r.error ? keyName(rows[i].key) : null)).filter(Boolean);
+        el.innerHTML = `${eyebrow}<div class="answer">Check the hours</div>
+          <p class="none-sub">Fix the working hours for ${esc(bad.join(" and "))} to see when everyone overlaps.</p>`;
+      } else {
+        el.innerHTML = `${eyebrow}<div class="answer">No overlap.</div>
+          <p class="none-sub">There's no time today when everyone is within working hours. Try stretching someone's start or end time.</p>`;
+      }
+      return;
+    }
+    el.classList.remove("none");
+    const start = res.day.start;
+    // Lead with the longest window; list any others underneath.
+    const windows = [...res.overlap].sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]));
+    const [a, b] = windows[0];
+    const ta = start + a * 60000, tb = start + b * 60000;
+    const extra = windows.slice(1).map(([x, y]) =>
+      `<b class="num">${fmtRange(refTz, start + x * 60000, start + y * 60000)}</b> (${fmtDuration(y - x)})`).join(", ");
+    el.innerHTML = `${eyebrow}
+      <div class="answer num">${fmtRange(refTz, ta, tb)}</div>
+      <div class="answer-meta">your time <span class="pill num">${fmtDuration(b - a)}</span></div>
+      <ul class="equiv">${equivList(rows, refTz, ta, tb)}</ul>
+      ${extra ? `<div class="also">Also free: ${extra}</div>` : ""}`;
+  }
+
+  function pct(min, N) { return (min / N * 100).toFixed(4) + "%"; }
+
+  function renderTimeline(res, rows) {
+    const N = res.day.minutes, start = res.day.start, refTz = rows[0].tz;
+    // Faint lines every 30 minutes, brighter every 6 hours of your time.
+    const step = 30 / N * 100;
+    const labels = [];
+    for (let m = 0; m <= N; m += 30) {
+      const p = zoneParts(refTz, start + m * 60000);
+      if (p.minute === 0 && p.hour % 6 === 0) {
+        const h = p.hour;
+        const hh = h % 12 === 0 ? 12 : h % 12;
+        labels.push({ m, text: `<b class="long">${hh} ${h < 12 ? "AM" : "PM"}</b><b class="short">${hh}${h < 12 ? "a" : "p"}</b>` });
+      }
+    }
+    const sixHour = labels.filter(l => l.m > 0 && l.m < N)
+      .map(l => `linear-gradient(90deg, transparent calc(${pct(l.m, N)} - .5px), rgba(0,0,0,.09) calc(${pct(l.m, N)} - .5px), rgba(0,0,0,.09) calc(${pct(l.m, N)} + .5px), transparent calc(${pct(l.m, N)} + .5px))`);
+    const gridBg = [...sixHour,
+      `repeating-linear-gradient(90deg, transparent 0, transparent calc(${step}% - 1px), rgba(0,0,0,.035) calc(${step}% - 1px), rgba(0,0,0,.035) ${step}%)`
+    ].join(",");
+    const axis = labels.map(l => {
+      const cls = l.m === 0 ? "first" : l.m >= N ? "last" : "";
+      return `<span class="${cls}" style="left:${pct(l.m, N)}">${l.text}</span>`;
+    }).join("") + `<div class="cursor-chip num" id="chip"></div>`;
+
+    const nowMin = (Date.now() - start) / 60000;
+    const nowLine = nowMin >= 0 && nowMin <= N ? `<div class="vline now" style="left:${pct(nowMin, N)}" title="Now"></div>` : "";
+    const ovCols = res.overlap.map(([a, b]) => `<div class="ov-col" style="left:${pct(a, N)};width:${pct(b - a, N)}"></div>`).join("");
+
+    let labelsHtml = `<div class="axis-spacer"></div>`;
+    let tracksHtml = "";
+    rows.forEach((r, i) => {
+      const result = res.results[i];
+      const you = i === 0 ? " you" : "";
+      const work = result.intervals.map(([a, b]) => `<div class="band work" style="left:${pct(a, N)};width:${pct(b - a, N)}"></div>`).join("");
+      const ov = res.overlap.map(([a, b]) => `<div class="band ov" style="left:${pct(a, N)};width:${pct(b - a, N)}"></div>`).join("");
+      const desc = result.error ? "working hours invalid"
+        : result.intervals.length ? "working " + result.intervals.map(([a, b]) => fmtRange(refTz, start + a * 60000, start + b * 60000)).join(", ") + " your time"
+        : "no working hours today";
+      labelsHtml += `
+        <div class="lab${you}" style="${colorVar(i)}">
+          <span class="name" title="${esc(keyName(r.key))}"><span class="dot"></span><span>${esc(keyName(r.key))}</span></span>
+          <span class="time num" data-row="${i}"></span>
+        </div>`;
+      tracksHtml += `
+        <div class="track${you}" style="${colorVar(i)}" role="img" aria-label="${esc(keyName(r.key))}: ${esc(desc)}">
+          <div class="gridlines" style="background-image:${gridBg}"></div>
+          ${work}${ov}
+        </div>`;
+    });
+
+    $("tl").innerHTML = `
+      <div class="tl-labels">${labelsHtml}</div>
+      <div class="tl-tracks">
+        <div class="axis" aria-hidden="true">${axis}</div>
+        <div class="tl-rows" id="tlrows">
+          ${tracksHtml}
+          ${ovCols}${nowLine}
+          <div class="vline cursor" id="cursor"></div>
+        </div>
+      </div>`;
+    updateCursor();
+  }
+
+  // Row clocks show the current time, or the moment under the pointer while scrubbing.
+  function updateCursor() {
+    if (!last) return;
+    const { res, rows } = last;
+    const N = res.day.minutes, refTz = rows[0].tz;
+    const t = hoverMin == null ? Date.now() : res.day.start + hoverMin * 60000;
+    document.querySelectorAll("#tl .time").forEach(span => {
+      const r = rows[+span.dataset.row];
+      const dd = dayDiff(r.tz, refTz, t);
+      span.textContent = fmtTime(r.tz, t) + (dd ? " · " + weekday(r.tz, t) : "");
+    });
+    $("tl").classList.toggle("scrubbing", hoverMin != null);
+    if (hoverMin != null) {
+      const left = pct(hoverMin, N);
+      $("cursor").style.left = left;
+      const chip = $("chip");
+      chip.style.left = `clamp(28px, ${left}, calc(100% - 28px))`;
+      chip.textContent = fmtTime(refTz, t);
+    }
+  }
+
+  function minuteFromEvent(e) {
+    const rowsEl = $("tlrows");
+    if (!rowsEl || !last) return null;
+    const rect = rowsEl.getBoundingClientRect();
+    const f = (e.clientX - rect.left) / rect.width;
+    if (f < 0 || f > 1) return null;
+    const N = last.res.day.minutes;
+    return Math.min(N - 1, Math.max(0, Math.round(f * N / 15) * 15));
+  }
+  const tl = $("tl");
+  tl.addEventListener("pointermove", e => { hoverMin = minuteFromEvent(e); updateCursor(); });
+  tl.addEventListener("pointerdown", e => { hoverMin = minuteFromEvent(e); updateCursor(); });
+  tl.addEventListener("pointerleave", () => { hoverMin = null; updateCursor(); });
+  tl.addEventListener("pointercancel", () => { hoverMin = null; updateCursor(); });
+  tl.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") { hoverMin = null; updateCursor(); } });
+
+  function update() {
+    const rows = rowsWithTz();
+    const res = compute(rows[0].tz, rows, Date.now());
+    last = { res, rows };
+    $("today").textContent = new Intl.DateTimeFormat("en-US", {
+      timeZone: rows[0].tz, weekday: "long", month: "long", day: "numeric"
+    }).format(res.day.start + 12 * 3600000);
+    renderErrors(res);
+    renderSummary(res, rows);
+    renderTimeline(res, rows);
+  }
+
+  buildCards();
+  update();
+  // Keep the "now" line, clocks and the day itself current.
+  setInterval(() => { if (hoverMin == null) update(); }, 60000);
+}
+</script>
+</body>
+</html>
